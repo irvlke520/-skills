@@ -1,0 +1,26 @@
+{
+  "_comment": "Offset table produced during the research phase. All values below are illustrative placeholders from a hypothetical target, not real offsets.",
+  "_how_to_obtain": {
+    "MODULE_BASE": "android_tools.py maps --proc <pkg> --filter <so>  -> r-xp segment start",
+    "MATRIX_OFF": "android_tools.py scan / chain on the view-projection matrix",
+    "ENTITY_BASE": "absolute address after resolving the entity list pointer chain",
+    "STRIDE": "distance between consecutive entity entries",
+    "COUNT": "maximum entities to iterate",
+    "POS_OFF": "offset of the vec3 position inside one entity",
+    "HEALTH_OFF": "offset of the float health field",
+    "TEAM_OFF": "offset of the int team id",
+    "BOX_RATIO": "box width / box height, typically 0.5 for humanoids",
+    "HEIGHT": "entity height in world units"
+  },
+  "DEVICE": "/dev/kmem_hub",
+  "MODULE_BASE": "0x7A1B2C3000",
+  "MATRIX_OFF": "0x1A2B3C",
+  "ENTITY_BASE": "0x7A1B2D4000",
+  "STRIDE": "0x120",
+  "COUNT": "64",
+  "POS_OFF": "0x90",
+  "HEALTH_OFF": "0x110",
+  "TEAM_OFF": "0x118",
+  "BOX_RATIO": "0.5",
+  "HEIGHT": "1.8"
+}

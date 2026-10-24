@@ -1,0 +1,4 @@
+interface:
+  display_name: "游戏运行时分析"
+  short_description: "从转储、回放与测试进程恢复游戏对象生命周期、状态变化和坐标关系"
+  default_prompt: "请用 $game-runtime-analysis 分析我提供的游戏转储或回放，解释目标状态变化并给出验证证据。"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unreal Engine 分析"
+  short_description: "UE4/UE5 构建、反射对象、资源容器与崩溃证据分析"
+  default_prompt: "使用 $unreal-engine-analysis 分析已提供的 UE 构建材料，定位我指定的函数、结构或崩溃问题。"

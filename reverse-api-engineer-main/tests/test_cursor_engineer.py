@@ -1,0 +1,146 @@
+"""Tests for Cursor SDK bridge integration (mocked, no real API calls)."""
+
+from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from reverse_api.cursor_engineer import CursorEngineer, CursorStreamUI, _ensure_cursor_bridge_deps
+
+
+@pytest.fixture
+def har_path(tmp_path: Path) -> Path:
+    p = tmp_path / "recording.har"
+    p.write_text('{"log":{"entries":[]}}')
+    return p
+
+
+@pytest.mark.asyncio
+async def test_cursor_engineer_analyze_missing_api_key(har_path: Path) -> None:
+    with patch.dict("os.environ", {"CURSOR_API_KEY": ""}):
+        with patch("reverse_api.cursor_engineer._ensure_cursor_bridge_deps", return_value=None):
+            eng = CursorEngineer(
+                run_id="abc123",
+                har_path=har_path,
+                prompt="test",
+                cursor_model="composer-2",
+                sdk="cursor",
+                interactive=False,
+                verbose=False,
+            )
+            out = await eng.analyze_and_generate()
+    assert out is None
+
+
+@pytest.mark.asyncio
+async def test_cursor_engineer_one_turn_error(har_path: Path) -> None:
+    with patch.dict("os.environ", {"CURSOR_API_KEY": "test-key"}):
+        with patch("reverse_api.cursor_engineer._ensure_cursor_bridge_deps", return_value=None):
+            eng = CursorEngineer(
+                run_id="abc123",
+                har_path=har_path,
+                prompt="test",
+                cursor_model="composer-2",
+                sdk="cursor",
+                interactive=False,
+                verbose=False,
+            )
+            with patch.object(eng, "_one_turn", new=AsyncMock(return_value={"error": "simulated"})):
+                out = await eng.analyze_and_generate()
+    assert out is None
+
+
+@pytest.mark.asyncio
+async def test_cursor_engineer_success_non_interactive(har_path: Path) -> None:
+    with patch.dict("os.environ", {"CURSOR_API_KEY": "test-key"}):
+        with patch("reverse_api.cursor_engineer._ensure_cursor_bridge_deps", return_value=None):
+            eng = CursorEngineer(
+                run_id="abc123",
+                har_path=har_path,
+                prompt="test",
+                cursor_model="composer-2",
+                sdk="cursor",
+                interactive=False,
+                verbose=False,
+            )
+            with patch.object(
+                eng,
+                "_one_turn",
+                new=AsyncMock(return_value={"ok": True, "agentId": "agent-xyz"}),
+            ):
+                with patch.object(eng.ui, "success", MagicMock()):
+                    with patch.object(eng.ui.console, "print", MagicMock()):
+                        out = await eng.analyze_and_generate()
+            assert out is not None
+    assert out.get("script_path", "").endswith("api_client.py")
+    assert isinstance(eng.ui, CursorStreamUI)
+
+
+def test_cursor_stream_ui_routes_thinking_to_buffer(har_path: Path) -> None:
+    with patch.dict("os.environ", {"CURSOR_API_KEY": "x"}):
+        with patch("reverse_api.cursor_engineer._ensure_cursor_bridge_deps", return_value=None):
+            eng = CursorEngineer(
+                run_id="r2",
+                har_path=har_path,
+                prompt="p",
+                sdk="cursor",
+                interactive=False,
+                verbose=True,
+            )
+    eng._cursor_reset_stream_buffers()
+    eng.ui.thinking("alpha")
+    eng.ui.thinking("beta")
+    assert eng._cursor_thinking_acc == "alphabeta"
+
+
+def test_ensure_bridge_missing_script(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import reverse_api.cursor_engineer as ce
+
+    monkeypatch.setattr(ce, "_BRIDGE_SCRIPT", tmp_path / "nonexistent.mjs")
+    err = _ensure_cursor_bridge_deps()
+    assert err is not None
+
+
+def test_cursor_stream_buffers_merge_assistant(tmp_path: Path) -> None:
+    har = tmp_path / "recording.har"
+    har.write_text("{}")
+    with patch.dict("os.environ", {"CURSOR_API_KEY": "x"}):
+        with patch("reverse_api.cursor_engineer._ensure_cursor_bridge_deps", return_value=None):
+            eng = CursorEngineer(
+                run_id="r1",
+                har_path=har,
+                prompt="p",
+                cursor_model="composer-2",
+                sdk="cursor",
+                interactive=False,
+                verbose=False,
+                output_dir=str(tmp_path),
+            )
+    eng._cursor_reset_stream_buffers()
+    eng._cursor_feed_assistant("Hello")
+    eng._cursor_feed_assistant("Hello world")
+    assert eng._cursor_assistant_acc == "Hello world"
+    eng._cursor_reset_stream_buffers()
+    eng._cursor_feed_assistant("Hello")
+    eng._cursor_feed_assistant(" world")
+    assert eng._cursor_assistant_acc == "Hello world"
+    eng._cursor_feed_thinking(" t1")
+    eng._cursor_feed_thinking(" t2")
+    assert eng._cursor_thinking_acc == " t1 t2"
+
+
+def test_cursor_reset_clears_started_calls(har_path: Path) -> None:
+    """_cursor_started_calls is cleared each turn so stale ids can't suppress tool_start."""
+    with patch.dict("os.environ", {"CURSOR_API_KEY": "x"}):
+        with patch("reverse_api.cursor_engineer._ensure_cursor_bridge_deps", return_value=None):
+            eng = CursorEngineer(
+                run_id="r4",
+                har_path=har_path,
+                prompt="p",
+                sdk="cursor",
+                interactive=False,
+                verbose=False,
+            )
+    eng._cursor_started_calls.add("stale-call-id")
+    eng._cursor_reset_stream_buffers()
+    assert eng._cursor_started_calls == set()
